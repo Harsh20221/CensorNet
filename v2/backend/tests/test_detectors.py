@@ -90,6 +90,34 @@ def test_blood_is_gated_by_the_classifier(monkeypatch):
     assert sorted(h.frame_idx for h in det.detect(FrameBatch(frames, 3.0))) == [0, 2]   # red shirt on 1, 3 ignored
 
 
+def test_small_wound_is_kept_only_when_the_scene_is_violent(monkeypatch):
+    from app.config import settings
+    from app.services.detectors import blood_detector as bd
+    monkeypatch.setattr(bd.ViolenceClassifier, "get", classmethod(lambda cls: object()))
+    monkeypatch.setattr(settings, "BLOOD_USE_CLASSIFIER", True)
+    det = bd.BloodDetector(); det.load()
+    frames = np.full((4, 180, 320, 3), 40, np.uint8)
+    frames[:, 80:96, 140:156] = (110, 12, 16)              # small dark-red wound, under the strict area cutoff
+    monkeypatch.setattr(bd, "violence_scores", lambda batch, idx: {i: 0.86 for i in idx})
+    assert len(det.detect(FrameBatch(frames, 3.0))) == 4
+    monkeypatch.setattr(bd, "violence_scores", lambda batch, idx: {i: 0.05 for i in idx})
+    assert det.detect(FrameBatch(frames, 3.0)) == []
+
+
+def test_smooth_red_lighting_is_not_called_blood(monkeypatch):
+    from app.config import settings
+    from app.services.detectors import blood_detector as bd
+    monkeypatch.setattr(bd.ViolenceClassifier, "get", classmethod(lambda cls: object()))
+    monkeypatch.setattr(bd, "violence_scores", lambda batch, idx: {i: 0.2 for i in idx})
+    monkeypatch.setattr(settings, "BLOOD_USE_CLASSIFIER", True)
+    det = bd.BloodDetector(); det.load()
+    frames = np.zeros((3, 180, 320, 3), np.uint8)
+    frames[..., 0] = 190                                   # flat red wash, like a gel light
+    frames[..., 1] = 24
+    frames[..., 2] = 24
+    assert det.detect(FrameBatch(frames, 3.0)) == []
+
+
 def test_unknown_detector_name_is_a_clear_error(monkeypatch):
     import pytest
     from app.config import settings

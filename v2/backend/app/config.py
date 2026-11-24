@@ -17,8 +17,14 @@ class Settings(BaseSettings):
     FFMPEG_BIN: str = "ffmpeg"
     FFPROBE_BIN: str = "ffprobe"
     YTDLP_BIN: str = "yt-dlp"
-    WORKER_COUNT: int = 2                 # used by run_workers.py
+    WORKER_COUNT: int = 3                 # used by run_workers.py; 5080 has room for three model copies
     DEVICE: str = "auto"                  # auto | cpu | cuda   (for torch / whisper / onnxruntime)
+    CUDA_DEVICE: int = 0                  # which GPU (RTX 5080 is device 0 on this machine)
+    USE_FP16: bool = True                 # half precision on CUDA for YOLO and the ViT
+    HWACCEL: str = "auto"                 # auto | cuda | none   (NVDEC decode)
+    VIDEO_ENCODER: str = "auto"           # auto | nvenc | libx264
+    NVENC_PRESET: str = "p1"              # p1 fastest ... p7 highest quality
+    DETECT_BATCH: int = 16                # frames per GPU batch (5080 has headroom at analysis resolution)
 
     # ---- chunking & scheduling ------------------------------------------------------------------
     CHUNK_SECONDS: float = 4.0            # unit of work AND hls segment length
@@ -30,10 +36,10 @@ class Settings(BaseSettings):
     OUTPUT_FPS_CAP: float = 30.0
 
     # ---- which detectors run (comma separated: nudenet, weapon, blood, violence) ----------------
-    ANALYZER: str = "nudenet,weapon,blood"
+    ANALYZER: str = "nudenet,weapon,blood,violence"
     ANALYSIS_FPS: float = 3.0             # frames/sec sent to the models
     ANALYSIS_WIDTH: int = 640             # frames are downscaled to this width for the models
-    TIME_PAD_SECONDS: float = 0.30        # extend every detection a little in time
+    TIME_PAD_SECONDS: float = 0.40        # cover the gap between analysis frames so a short gore cut is not visible
     TRACK_MAX_GAP: int = 2                # missed analysis frames allowed inside one track
 
     # ---- thresholds -----------------------------------------------------------------------------
@@ -91,7 +97,7 @@ settings = Settings()
 
 
 def resolve_device(value: str | None = None) -> str:
-    """'auto' -> 'cuda' if torch can see a GPU, else 'cpu'."""
+    """'auto' -> 'cuda' if torch can see a GPU, else 'cpu'. Returns 'cuda' or 'cpu', never 'cuda:N'."""
     value = (value or settings.DEVICE).lower()
     if value != "auto":
         return value
@@ -100,3 +106,10 @@ def resolve_device(value: str | None = None) -> str:
         return "cuda" if torch.cuda.is_available() else "cpu"
     except Exception:  # noqa: BLE001  (torch not installed -> CPU)
         return "cpu"
+
+
+def torch_device() -> str:
+    """Device string PyTorch and Ultralytics accept, pinned to CUDA_DEVICE."""
+    if resolve_device() != "cuda":
+        return "cpu"
+    return f"cuda:{settings.CUDA_DEVICE}"

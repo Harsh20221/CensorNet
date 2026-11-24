@@ -7,9 +7,7 @@ Any class whose NAME is listed in WEAPON_LABELS is treated as a weapon, so custo
 """
 import logging
 
-import numpy as np
-
-from app.config import resolve_device, settings
+from app.config import settings, torch_device
 from app.services.detection import FrameBatch, FrameHit
 
 log = logging.getLogger("weapon")
@@ -25,7 +23,15 @@ class WeaponDetector:
             from huggingface_hub import hf_hub_download
             path = hf_hub_download(repo_id=settings.WEAPON_HF_REPO, filename=settings.WEAPON_HF_FILE)
         self.model = YOLO(path)
-        self.device = resolve_device()
+        self.device = torch_device()
+        self.half = self.device.startswith("cuda") and settings.USE_FP16
+        if self.device != "cpu" and hasattr(self.model, "to"):
+            self.model.to(self.device)
+        if hasattr(self.model, "fuse"):
+            try:
+                self.model.fuse()
+            except Exception:  # noqa: BLE001
+                log.debug("YOLO fuse skipped", exc_info=True)
         wanted = {s.strip().lower() for s in settings.WEAPON_LABELS.split(",") if s.strip()}
         names = self.model.names                  # {class_id: name}
         self.keep = {i for i, n in names.items() if str(n).strip().lower() in wanted}
@@ -36,9 +42,12 @@ class WeaponDetector:
     def detect(self, batch: FrameBatch) -> list[FrameHit]:
         if len(batch) == 0:
             return []
-        bgr = [np.ascontiguousarray(f[..., ::-1]) for f in batch.frames]      # ultralytics arrays are BGR
-        results = self.model.predict(bgr, conf=min(settings.THRESH_WEAPON, 0.25), imgsz=settings.WEAPON_IMGSZ,
-                                     device=self.device, verbose=False)
+        bgr = batch.bgr()                                                    # ultralytics arrays are BGR
+        frames = [bgr[i] for i in range(len(bgr))]
+        results = self.model.predict(
+            frames, conf=min(settings.THRESH_WEAPON, 0.25), imgsz=settings.WEAPON_IMGSZ,
+            device=self.device, half=self.half, verbose=False, batch=settings.DETECT_BATCH,
+        )
         hits: list[FrameHit] = []
         for i, res in enumerate(results):
             for b in res.boxes:

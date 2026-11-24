@@ -69,6 +69,28 @@ def main() -> int:
                   "   then   pip install -r requirements.txt")
     else:
         print("  OK Python packages")
+        from app.config import settings as _settings
+        from app.services.gpu import describe, enable_cuda_dlls
+        enable_cuda_dlls()
+        gpu = describe()
+        if gpu.get("available"):
+            print(f"  OK GPU {gpu.get('name')} (torch {gpu.get('torch')}, CUDA {gpu.get('torch_cuda')}, "
+                  f"sm_{gpu.get('capability')})")
+        elif any(n in analyzers for n in ("weapon", "blood", "violence")) or _settings.DEVICE == "cuda":
+            problems.append("gpu")
+            print("  X PyTorch cannot use the NVIDIA GPU "
+                  f"(torch {gpu.get('torch')}, cuda {gpu.get('torch_cuda')}).")
+            print("    RTX 5080 needs the CUDA 13.4 wheel:")
+            print("    pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cu134")
+        if "nudenet" in analyzers and have("onnxruntime"):
+            import onnxruntime as ort
+            providers = ort.get_available_providers()
+            if "CUDAExecutionProvider" in providers:
+                print(f"  OK ONNX Runtime CUDA ({ort.__version__})")
+            else:
+                problems.append("onnxruntime-gpu")
+                print(f"  X ONNX Runtime {ort.__version__} has no CUDAExecutionProvider (providers: {providers})")
+                print("    fix:  pip uninstall -y onnxruntime && pip install onnxruntime-gpu")
         if wrong_python:
             print(f"  ! Python {PY_VERSION[0]}.{PY_VERSION[1]} is outside 3.10-3.12 (untested); it works only because the packages happen to be installed")
 

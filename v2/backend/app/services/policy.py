@@ -31,6 +31,6 @@ POLICY: dict[str, Rule] = {
     # "MALE_BREAST_EXPOSED":    _nudity(0.6),     # off by default (very common, usually acceptable)
 
     "weapon":   Rule("weapon", settings.THRESH_WEAPON, "blur", 0.25),
-    "blood":    Rule("blood", settings.THRESH_BLOOD, "blur", 0.15, min_hits=settings.BLOOD_MIN_HITS),
+    "blood":    Rule("blood", settings.THRESH_BLOOD, "blur", 0.32, min_hits=settings.BLOOD_MIN_HITS),
     "violence": Rule("violence", settings.THRESH_VIOLENCE, "blur", 0.0, min_hits=settings.VIOLENCE_MIN_HITS),
 }

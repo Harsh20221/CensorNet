@@ -17,6 +17,7 @@ from app.db import init_db
 from app.services import audio_service, queue_service
 from app.services.analyzer import get_analyzer
 from app.services.chunk_processor import process_chunk
+from app.services.gpu import configure_runtime
 from app.services.video_service import prepare_video
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -54,6 +55,8 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _stop)
 
     init_db()
+    gpu = configure_runtime(require_cuda=settings.DEVICE.lower() == "cuda")
+    log.info("runtime device=%s gpu=%s", gpu.get("resolved"), gpu.get("name", "cpu"))
     analyzer = get_analyzer()
     analyzer.load()
     if settings.AUDIO_ENABLED:

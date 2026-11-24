@@ -37,10 +37,12 @@ def health():
             c.execute(text("SELECT 1"))
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": str(e)}
+    from app.services.gpu import describe
+
     workers = queue_service.alive_workers()
     return {"ok": True, "redis": True, "postgres": True, "workers": len(workers), "worker_ids": workers,
             "queue_length": queue_service.queue_length(), "inflight": queue_service.inflight_count(),
-            "analyzers": settings.analyzers}
+            "analyzers": settings.analyzers, "gpu": describe()}
 
 
 @app.get("/queue")

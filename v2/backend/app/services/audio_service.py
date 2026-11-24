@@ -19,18 +19,37 @@ log = logging.getLogger("audio")
 _model = None
 
 
+def _whisper_device() -> str:
+    """Prefer the GPU even when the PyTorch build is CPU-only. faster-whisper uses CTranslate2."""
+    requested = settings.WHISPER_DEVICE
+    device = resolve_device(None if requested == "auto" else requested)
+    if device == "cuda" or requested == "cpu":
+        return device
+    if requested == "auto":
+        try:
+            import ctranslate2
+            if ctranslate2.get_cuda_device_count() > 0:
+                return "cuda"
+        except Exception:  # noqa: BLE001
+            pass
+    return device
+
+
 def load_model():
     """Heavy: once per worker process."""
     global _model
     if _model is None:
         from faster_whisper import WhisperModel
-        device = resolve_device(settings.WHISPER_DEVICE if settings.WHISPER_DEVICE != "auto" else None)
+        device = _whisper_device()
         compute = settings.WHISPER_COMPUTE
         if compute == "auto":
             compute = "float16" if device == "cuda" else "int8"
-        log.info("loading whisper '%s' on %s (%s)", settings.WHISPER_MODEL, device, compute)
-        _model = WhisperModel(settings.WHISPER_MODEL, device=device, compute_type=compute,
-                              cpu_threads=settings.WHISPER_CPU_THREADS)
+        kwargs = {"device": device, "compute_type": compute, "cpu_threads": settings.WHISPER_CPU_THREADS}
+        if device == "cuda":
+            kwargs["device_index"] = settings.CUDA_DEVICE
+        log.info("loading whisper '%s' on %s:%s (%s)", settings.WHISPER_MODEL, device,
+                 settings.CUDA_DEVICE if device == "cuda" else "-", compute)
+        _model = WhisperModel(settings.WHISPER_MODEL, **kwargs)
     return _model
 
 

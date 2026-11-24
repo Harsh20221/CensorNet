@@ -17,6 +17,14 @@ class FrameBatch:
     def __len__(self) -> int:
         return len(self.frames)
 
+    def bgr(self) -> np.ndarray:
+        """RGB frames as one contiguous BGR array. Shared by every detector that wants OpenCV order."""
+        cached = self.cache.get("bgr")
+        if cached is None:
+            cached = np.ascontiguousarray(self.frames[..., ::-1])
+            self.cache["bgr"] = cached
+        return cached
+
 
 @dataclass
 class FrameHit:

@@ -148,8 +148,11 @@ For example, the command may look like this, but the exact index should be
 chosen for the installed PyTorch release:
 
 ```powershell
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cu134
 ```
+
+The RTX 5080 is compute capability 12.0. A CPU wheel, or a CUDA 12.6 wheel, will not run kernels on it.
+The driver must be new enough for CUDA 13 (this machine reports CUDA UMD 13.5).
 
 Do not install the CPU-only PyTorch wheel afterward. Confirm the selected wheel
 with:
